@@ -1,0 +1,55 @@
+heat_template_version: 2016-04-08
+
+description: This template creates a standard neutron port to associate with a Big-IP instance. This template uses an index parameter that enables ports to be created as part of a resource group.
+
+parameters:
+  index:
+    type: number
+    label: Port Index
+    description: The index of the port in the group
+  security_groups:
+    type: comma_delimited_list
+    label: Security Groups
+    description: Security group settings for the ports
+  network_names:
+    type: comma_delimited_list
+    label: Network Names
+    description: A list of networks the ports should be created in
+  network_subnets:
+    type: comma_delimited_list
+    label: Network Subnets
+    description: A list of subnets the ports should be created in
+
+resources:
+  bigip_neutron_port:
+    type: OS::Neutron::Port
+    properties:
+      network: { get_param: [network_names, { get_param: index }] }
+      security_groups: [{ get_param: [ security_groups, { get_param: index}] }]
+      admin_state_up: true
+      allowed_address_pairs:
+        - ip_address: 0.0.0.0/0
+        - ip_address: ::/0
+      fixed_ips:
+        repeat:
+          for_each:
+            <%subnet%>:
+              str_split:
+                - ';'
+                - { get_param: [network_subnets, { get_param: index }] }
+          template:
+            subnet: <%subnet%>
+
+outputs:
+  neutron_port_id:
+    value: {get_resource: bigip_neutron_port}
+  neutron_port_subnets:
+    value: { get_attr: [bigip_neutron_port, subnets] }
+  neutron_port_fixed_ips:
+    value: { get_attr: [bigip_neutron_port, fixed_ips] }
+  bigip_self_ip_address:
+    value: { get_attr: [bigip_neutron_port, fixed_ips, 0, ip_address] }
+  bigip_self_ip_cidr:
+    value: { get_attr: [bigip_neutron_port, subnets, 0, cidr] }
+  bigip_self_ip_mask:
+    value: { str_split: ['/', { get_attr: [ bigip_neutron_port, subnets, 0, cidr] }, 1] }
